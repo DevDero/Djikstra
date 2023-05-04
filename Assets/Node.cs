@@ -1,45 +1,123 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Drawing;
 using UnityEngine;
-using UnityEngine.UIElements;
+using UnityEngine.UI;
 
 public class Node : MonoBehaviour
 {
+    public GameObject pathParent, pathFab;
 
-    public Dictionary<GameObject , Node > pathPair = new Dictionary<GameObject, Node>();
-    NodeType type;
-    Vector3 distance;
-    bool hasVisited;
-    Node[] adjacentNodes;
+    private float distance;
 
-    GameObject path,pathParent;
 
-    public GameObject CreateBind(Vector2 nextNodePos)
+    private Dictionary<Path , Node > NodePathPairs = new Dictionary<Path, Node>();
+    private Node previousNode, nodeTarget;
+
+    private NodeType type;
+    private bool hasVisited = false;
+    private Coroutine pathMode;
+    private Path pathCache;
+
+    public Dictionary<Path, Node> NodePathPair { get => NodePathPairs; }
+    public Node NodeTarget
     {
-        GameObject go = GameObject.Instantiate(path);
-
-        go.transform.SetParent(pathParent.transform);
-
-        RectTransform tempRect = go.GetComponent<RectTransform>();
-        tempRect.transform.eulerAngles = new Vector3(0 , 0 ,Vector2.SignedAngle(Vector2.zero, nextNodePos));
-
-        float phytag = Mathf.Sqrt(nextNodePos.x * nextNodePos.x + nextNodePos.y + nextNodePos.x);
-
-        tempRect.sizeDelta = new Vector2(10, phytag);
-        tempRect.anchoredPosition = nextNodePos;
-
-        return go;
+        get => nodeTarget;
+        set
+        {
+            //filter assigning node it self
+            if (value != this)
+                nodeTarget = value;
+        }
     }
-    public void DeleteBind(GameObject go)
+
+    public void CreatePath()
     {
+        if (pathCache == null) 
+        {
+            GameObject path = GameObject.Instantiate(pathFab);
+            path.name = pathParent.transform.childCount + "path";
+            path.transform.SetParent(pathParent.transform);
+            pathMode = StartCoroutine(PathMode(pathCache = path.GetComponent<Path>()));
+        }
+        else
+            pathMode = StartCoroutine(PathMode(pathCache));
+    }
 
+    private void ValidatePath(RectTransform rect)
+    {
+        if (!NodePathPair.ContainsValue(nodeTarget))
+        {
+            //reciproc insert paths
+            NodePathPairs.Add(pathCache, nodeTarget);
+            nodeTarget.NodePathPairs.Add(pathCache, this);
 
+            pathCache = null;
+            nodeTarget = null;
+        }
+        else DropPath(rect);
+    }
+
+    private void DropPath(RectTransform rect)
+    {
+        rect.sizeDelta = new Vector2(4, 0);
+        nodeTarget = null;
+    }
+
+    public void DeletePath(Path path)
+    {
+        NodePathPair.Remove(path);
+        GameObject.Destroy(path.gameObject);
+    }
+
+    
+    private IEnumerator PathMode(Path currentPath)
+    {
+        UnityEngine.Color color = UnityEngine.Color.white;
+        var image = gameObject.GetComponent<Image>();
+        var tempRect = pathCache.GetComponent<RectTransform>();
+        currentPath.transform.localPosition = Vector3.zero;
+
+        while (!Input.GetMouseButtonUp(0))
+        {
+            pathCache.transform.rotation = Lookat2D(Input.mousePosition, transform.position);
+            tempRect.sizeDelta = new Vector2(4, Vector2.Distance(Input.mousePosition,transform.position));
+
+            color.a = Mathf.Sin(Time.time * 10);
+            image.color = color;
+            yield return null;
+
+        }
+        color.a = 1;
+        image.color = color;
+
+        if (nodeTarget != null)
+            ValidatePath(tempRect); 
+        else
+            DropPath(tempRect);
+
+    }
+    private Quaternion Lookat2D(Vector2 vec1,Vector2 vec2)
+    {
+        Vector2 dir = vec1 - vec2;
+        var ang = MathF.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
+        return Quaternion.AngleAxis(ang-90, Vector3.forward);
+    }
+
+    private void CoreMethod()
+    {
+        foreach( var  pair in NodePathPairs)
+        {
+            float tentativeDist = this.distance + pair.Key.Delta;
+
+            if (pair.Value.distance > tentativeDist && !pair.Value.hasVisited)
+            {
+                pair.Value.distance = tentativeDist;
+            }
+        }
+        this.hasVisited = true;
     }
     
-    public void BindingMode()
-    {
-        gameObject.GetComponent<Image>().tintColor = UnityEngine.Color.blue;
-
-        
-    }
 }
+

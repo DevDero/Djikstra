@@ -18,6 +18,5 @@ public class NodeSet
         this.nodes = nodes;
     }
 
-
 }
 public enum NodeType { final,source,common}
